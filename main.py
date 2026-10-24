@@ -1,5 +1,6 @@
 import math
 import os
+import pandas as pd
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,6 +83,92 @@ def get_all_villages_risk():
     sorted by risk probability descending.
     """
     return data_loader.get_all_villages_risk()
+
+
+@app.get("/api/ml/clusters")
+def get_ml_cluster_summary():
+    """
+    Return summary statistics from the K-Means clustering analysis.
+    This endpoint describes rainfall and terrain patterns, not confirmed
+    flood predictions.
+    """
+    csv_path = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "data",
+        "rainfall_clusters.csv"
+    )
+
+    if not os.path.isfile(csv_path):
+        raise HTTPException(
+            status_code=404,
+            detail="ML results not found. Run python ml_analysis.py first."
+        )
+
+    try:
+        df = pd.read_csv(csv_path)
+
+        required_columns = [
+            "ml_cluster",
+            "rainfall_daily_mm",
+            "rainfall_3d_mm",
+            "rainfall_7d_mm",
+            "elevation_m",
+            "slope_deg"
+        ]
+
+        missing_columns = [
+            column for column in required_columns
+            if column not in df.columns
+        ]
+
+        if missing_columns:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Missing columns in ML results: {missing_columns}"
+            )
+
+        if df.empty:
+            raise HTTPException(
+                status_code=500,
+                detail="The ML results file is empty."
+            )
+
+        summary = (
+            df.groupby("ml_cluster")
+            .agg(
+                observations=("ml_cluster", "size"),
+                avg_daily_rainfall_mm=("rainfall_daily_mm", "mean"),
+                avg_3day_rainfall_mm=("rainfall_3d_mm", "mean"),
+                avg_7day_rainfall_mm=("rainfall_7d_mm", "mean"),
+                avg_elevation_m=("elevation_m", "mean"),
+                avg_slope_deg=("slope_deg", "mean")
+            )
+            .round(2)
+            .reset_index()
+        )
+
+        clusters = summary.to_dict(orient="records")
+
+        return {
+            "algorithm": "K-Means Clustering",
+            "cluster_count": int(df["ml_cluster"].nunique()),
+            "total_observations": int(len(df)),
+            "clusters": clusters,
+            "note": (
+                "Clusters represent rainfall and terrain patterns. "
+                "They are not verified flood-risk classifications."
+            )
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unable to read ML results: {str(exc)}"
+        )
+
 
 
 @app.post("/predict-risk", response_model=PredictRiskResponse)

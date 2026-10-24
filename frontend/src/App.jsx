@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import MLClusterAnalysis from './components/MLClusterAnalysis';
 import Header from './components/Header';
 import MapView from './components/MapView';
 import WarningAlert from './components/WarningAlert';
@@ -371,6 +372,8 @@ export default function App() {
           onSelectVillage={handleSelectVillage}
           highestRiskVillage={highestRiskVillage}
         />
+        {/* ML Cluster Analysis */}
+        <MLClusterAnalysis />
       </main>
 
       {/* Footer */}
